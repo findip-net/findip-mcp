@@ -1,4 +1,4 @@
-export const VERSION = '0.1.0';
+export const VERSION = '0.1.1';
 
 export interface Config {
   /** FindIP API key (the token used with api.findip.net). */
