@@ -1,6 +1,13 @@
 # Backend for the Shield tools
 
-Status: proposal. Nothing in this document is built or deployed.
+Status: built, not deployed. The endpoint is in ReftechSoftware/findip#49 and is off by default.
+
+What was built differs from the proposal below in two ways, both decided by the owner on 2026-10-11:
+
+- The key is resolved by NewApi, not by a NewWeb database read. NewWeb calls the new cluster-internal action `POST api/internal/user-cache/resolve` (headers `X-Resolve-Token`, `X-Api-Key`), which answers from the user cache the lookup path already uses. Risk 3 no longer applies.
+- Every account's API key has Shield read access once the endpoint is switched on; there is no per-account opt-in.
+
+Identity is removed in the controller (`identity`, `identityContext`, `customerContext`), and it has its own in-memory limits: 8 failed keys per IP per 10 minutes, 60 requests per account per minute. An extra error exists: `502 {"error":"key_resolver_unreachable"}`.
 
 ## What exists today
 
