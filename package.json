@@ -1,0 +1,64 @@
+{
+  "name": "@findip/mcp",
+  "version": "0.1.0",
+  "description": "MCP server for FindIP: IP intelligence lookups and FindIP Shield risk signals for AI assistants",
+  "type": "module",
+  "bin": {
+    "findip-mcp": "dist/index.js"
+  },
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    }
+  },
+  "files": [
+    "dist",
+    "docs"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "homepage": "https://findip.net",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/findip-net/findip-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/findip-net/findip-mcp/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && chmod +x dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepack": "npm run typecheck && npm run test && npm run build"
+  },
+  "keywords": [
+    "findip",
+    "mcp",
+    "model-context-protocol",
+    "ip-intelligence",
+    "ip-geolocation",
+    "vpn-detection",
+    "proxy-detection",
+    "tor-detection",
+    "risk",
+    "fraud-detection"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "typescript": "^5.8.3",
+    "vitest": "^5.0.3"
+  }
+}
