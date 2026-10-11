@@ -1,11 +1,13 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.findip-net/findip-mcp",
+  "title": "FindIP",
   "description": "IP intelligence lookups and FindIP Shield visitor risk signals for AI assistants.",
   "repository": {
     "url": "https://github.com/findip-net/findip-mcp",
     "source": "github"
   },
+  "websiteUrl": "https://www.findip.net/shield/overview",
   "version": "0.1.1",
   "packages": [
     {
@@ -20,13 +22,15 @@
           "name": "FINDIP_API_KEY",
           "description": "Your FindIP API key (free at https://www.findip.net). Used for IP lookups and your Shield sites.",
           "isRequired": true,
-          "isSecret": true
+          "isSecret": true,
+          "format": "string"
         },
         {
           "name": "FINDIP_SHIELD_SECRET_KEY",
           "description": "A Shield site's secret key (sec_...). Only needed for verify_session.",
           "isRequired": false,
-          "isSecret": true
+          "isSecret": true,
+          "format": "string"
         }
       ]
     }
