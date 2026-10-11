@@ -64,8 +64,8 @@ export function createServer(config: Config = loadConfig(), fetchImpl?: FetchLik
     {
       title: 'List Shield sites',
       description:
-        'Lists the FindIP Shield sites on your account with status, last event time and today\'s event and risky-event counts. ' +
-        'Requires the Shield account API, which is not available yet; until then this returns endpoint_not_available.',
+        'Lists the FindIP Shield sites on your account: ID, name, domain, status, last event time and today\'s event and risky-event counts. ' +
+        'Start here to find the site to ask about.',
       inputSchema: {},
       annotations: READ_ONLY,
     },
@@ -79,8 +79,7 @@ export function createServer(config: Config = loadConfig(), fetchImpl?: FetchLik
       description:
         'Recent events on one Shield site at or above a risk score, newest first: event name, page, IP, country, network, ' +
         'network signals, score, recommendation and reasons. Good for questions like "what risky traffic hit my signup form this week". ' +
-        'End-user identity is never returned. ' +
-        'Requires the Shield account API, which is not available yet; until then this returns endpoint_not_available.',
+        'End-user identity is never returned.',
       inputSchema: {
         site: z.string().min(1).max(253).describe('Site ID, name or domain, as shown by list_shield_sites'),
         range: z.enum(RANGES).optional().describe('Time window. Default 7d'),
@@ -100,8 +99,7 @@ export function createServer(config: Config = loadConfig(), fetchImpl?: FetchLik
       title: 'Explain a Shield event',
       description:
         'Explains one Shield event in plain language: where it came from, which risk signals fired, the score and recommendation, ' +
-        'and what the in-page SDK did. The explanation describes risk signals, not a verdict about the visitor. ' +
-        'Requires the Shield account API, which is not available yet; until then this returns endpoint_not_available.',
+        'and what the in-page SDK did. The explanation describes risk signals, not a verdict about the visitor.',
       inputSchema: {
         event_id: z.string().min(1).max(128).describe('Event ID from recent_risky_events'),
         site: z.string().max(253).optional().describe('Site ID, name or domain. Optional; without it each of your sites is checked'),

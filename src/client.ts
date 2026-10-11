@@ -5,6 +5,7 @@ export type FindIPErrorCode =
   | 'missing_api_key'
   | 'missing_secret_key'
   | 'invalid_input'
+  | 'disabled'
   | 'endpoint_not_available'
   | 'unauthorized'
   | 'forbidden'
@@ -75,8 +76,9 @@ function networkSignals(event: Json): string[] {
 }
 
 /**
- * The event fields an assistant needs. End-user identity (email, user ID,
- * hashes) and the raw customer context are left out on purpose.
+ * The event fields an assistant needs. The account API already strips
+ * end-user identity and customer context; picking fields here keeps it that
+ * way whatever the server sends.
  */
 export function summarizeEvent(event: Json): Json {
   return {
@@ -98,7 +100,6 @@ export function summarizeEvent(event: Json): Json {
     risk_reasons: Array.isArray(event.riskReasons) ? event.riskReasons : [],
     enforcement_action: event.enforcementAction ?? null,
     enforcement_outcome: event.enforcementOutcome ?? null,
-    identified: event.identity != null,
   };
 }
 
@@ -216,7 +217,7 @@ export class FindIPClient {
     });
   }
 
-  // ---- Proposed Shield account API (docs/BACKEND.md) ----
+  // ---- Shield account API (docs/BACKEND.md) ----
 
   async listShieldSites(): Promise<Json[]> {
     return (await this.rawSites()).map(summarizeSite);
@@ -311,18 +312,13 @@ export class FindIPClient {
     );
   }
 
-  private notAvailable(path: string): FindIPError {
-    const endpoint = `GET ${this.config.portalBaseUrl}${ACCOUNT_API_PATH}${path.split('?')[0]}`;
-    return new FindIPError(
-      'endpoint_not_available',
-      `This tool requires the FindIP Shield account API (${endpoint}), which is not available yet. ` +
-        'Shield dashboard data is currently reachable only from a signed-in browser at https://findip.net/shield. ' +
-        'lookup_ip and verify_session work today. Once the endpoint is live, set FINDIP_SHIELD_ACCOUNT_API=1.',
-    );
-  }
-
   private async accountApi(path: string): Promise<unknown> {
-    if (!this.config.shieldAccountApiEnabled) throw this.notAvailable(path);
+    if (!this.config.shieldAccountApiEnabled) {
+      throw new FindIPError(
+        'disabled',
+        'The Shield account tools are turned off on this MCP server (FINDIP_SHIELD_ACCOUNT_API=0). Remove that setting to use them.',
+      );
+    }
     const key = this.requireApiKey();
     try {
       return await this.request('Shield account API', `${this.config.portalBaseUrl}${ACCOUNT_API_PATH}${path}`, {
@@ -330,10 +326,31 @@ export class FindIPClient {
         headers: { Authorization: `Bearer ${key}` },
       });
     } catch (error) {
-      // The endpoint is feature-flagged off by default and answers 404 then;
-      // only /sites can tell "not deployed" from "no such site or event".
-      if (error instanceof FindIPError && error.code === 'not_found' && path === '/sites') {
-        throw this.notAvailable(path);
+      if (!(error instanceof FindIPError)) throw error;
+      // /sites always exists for a valid key, so a 404 there means the
+      // endpoint itself is switched off, not "no such site or event".
+      if (error.code === 'not_found' && path === '/sites') {
+        throw new FindIPError(
+          'endpoint_not_available',
+          `The FindIP Shield account API (GET ${this.config.portalBaseUrl}${ACCOUNT_API_PATH}/sites) answered 404, so it is switched off right now. ` +
+            'lookup_ip and verify_session are not affected. Try again later, or use the dashboard at https://findip.net/shield.',
+          404,
+        );
+      }
+      if (error.code === 'unauthorized') {
+        throw new FindIPError(
+          'unauthorized',
+          'FindIP did not accept the API key for Shield. Check FINDIP_API_KEY, and that the account is active with a verified email. ' +
+            'Repeated failed keys are blocked for 10 minutes.',
+          error.status,
+        );
+      }
+      if (error.code === 'rate_limited') {
+        throw new FindIPError(
+          'rate_limited',
+          'The Shield account API is rate limited (60 requests per account per minute; failed keys are blocked for 10 minutes). Wait and try again.',
+          429,
+        );
       }
       throw error;
     }
@@ -369,6 +386,17 @@ export class FindIPClient {
 
     const detail = upstreamDetail(body);
     const suffix = detail ? ` (${detail})` : '';
+    if (response.status >= 300 && response.status < 400) {
+      // Redirects are not followed: another host would not get the Authorization header, and must not get the key.
+      throw new FindIPError('upstream_error', `${what} answered with a redirect, which is not followed. Check the FindIP base URL settings.`, response.status);
+    }
+    if (detail === 'key_resolver_unreachable' || detail === 'shield_api_unreachable') {
+      throw new FindIPError(
+        'upstream_error',
+        `${what} is temporarily unavailable (${detail}). This is on FindIP's side; try again in a moment.`,
+        response.status,
+      );
+    }
     switch (response.status) {
       case 400:
         // api.findip.net answers 400 for a missing or unknown token.

@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { describe, expect, it } from 'vitest';
 import { createServer, type Config, type FetchLike } from '../src/server.js';
-import { KEY, config, mockFetch } from './helpers.js';
+import { KEY, SITE_A, config, mockFetch } from './helpers.js';
 
 async function connect(cfg: Config, fetch: FetchLike): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
@@ -32,7 +32,7 @@ describe('MCP server', () => {
       expect(tool.annotations?.readOnlyHint).toBe(true);
       expect(tool.description).toBeTruthy();
       // Copy rules: risk signals, never proof.
-      expect(tool.description).not.toMatch(/proof|fraudster|guarantee/i);
+      expect(tool.description).not.toMatch(/proof|fraudster|guarantee|not available yet/i);
     }
   });
 
@@ -51,14 +51,25 @@ describe('MCP server', () => {
     expect(JSON.parse(text(result))).toEqual({ verified: true, risk_score: 12 });
   });
 
-  it('returns a clear tool error while the account API is not available', async () => {
+  it('lists Shield sites by default, as a compact summary', async () => {
+    const { fetch, calls } = mockFetch({ 'GET https://www.findip.net/api/shield/v1/sites': { json: [SITE_A] } });
+    const client = await connect(config(), fetch);
+    const result = await client.callTool({ name: 'list_shield_sites', arguments: {} });
+    expect(result.isError).toBeFalsy();
+    expect(calls[0]!.headers.Authorization).toBe(`Bearer ${KEY}`);
+    const body = text(result);
+    expect(JSON.parse(body)).toHaveLength(1);
+    expect(body).not.toMatch(/identityKey|userId|enforcement|pub_abc/);
+  });
+
+  it('returns a clear tool error when the account tools are switched off', async () => {
     const { fetch, calls } = mockFetch({});
     const client = await connect(config({ shieldAccountApiEnabled: false }), fetch);
     const result = await client.callTool({ name: 'recent_risky_events', arguments: { site: 'shop.example' } });
     expect(result.isError).toBe(true);
     const payload = JSON.parse(text(result)) as { error: string; message: string };
-    expect(payload.error).toBe('endpoint_not_available');
-    expect(payload.message).toContain('requires the FindIP Shield account API');
+    expect(payload.error).toBe('disabled');
+    expect(payload.message).toContain('FINDIP_SHIELD_ACCOUNT_API');
     expect(calls).toHaveLength(0);
   });
 

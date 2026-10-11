@@ -3,7 +3,7 @@ import { FindIPClient, FindIPError } from '../src/client.js';
 import { loadConfig } from '../src/config.js';
 import { EVENT, KEY, SECRET, SITE_A, SITE_B, config, mockFetch } from './helpers.js';
 
-const API = 'https://findip.net/api/shield/v1';
+const API = 'https://www.findip.net/api/shield/v1';
 
 async function failure(work: Promise<unknown>): Promise<FindIPError> {
   try {
@@ -16,23 +16,25 @@ async function failure(work: Promise<unknown>): Promise<FindIPError> {
 }
 
 describe('loadConfig', () => {
-  it('uses production defaults and keeps the account API off', () => {
+  it('uses production defaults with the account API on', () => {
     const c = loadConfig({ FINDIP_API_KEY: ' k ' });
     expect(c).toMatchObject({
       apiKey: 'k',
       lookupBaseUrl: 'https://api.findip.net',
       shieldBaseUrl: 'https://shield.findip.net',
-      portalBaseUrl: 'https://findip.net',
-      shieldAccountApiEnabled: false,
+      portalBaseUrl: 'https://www.findip.net',
+      shieldAccountApiEnabled: true,
       timeoutMs: 15000,
     });
   });
 
   it('reads overrides and rejects a bad URL', () => {
-    expect(loadConfig({ FINDIP_SHIELD_ACCOUNT_API: 'true', FINDIP_API_BASE_URL: 'http://localhost:8080/' })).toMatchObject({
-      shieldAccountApiEnabled: true,
+    expect(loadConfig({ FINDIP_SHIELD_ACCOUNT_API: 'false', FINDIP_API_BASE_URL: 'http://localhost:8080/' })).toMatchObject({
+      shieldAccountApiEnabled: false,
       lookupBaseUrl: 'http://localhost:8080',
     });
+    expect(loadConfig({ FINDIP_SHIELD_ACCOUNT_API: '0' }).shieldAccountApiEnabled).toBe(false);
+    expect(loadConfig({ FINDIP_SHIELD_ACCOUNT_API: '1' }).shieldAccountApiEnabled).toBe(true);
     expect(() => loadConfig({ FINDIP_PORTAL_BASE_URL: 'ftp://x' })).toThrow(/FINDIP_PORTAL_BASE_URL/);
   });
 });
@@ -136,22 +138,44 @@ describe('verifySession', () => {
   });
 });
 
-describe('Shield account API (proposed)', () => {
-  it('is off by default: names the endpoint and sends nothing', async () => {
+describe('Shield account API', () => {
+  it('can be switched off, and then sends nothing', async () => {
     const { fetch, calls } = mockFetch({});
     const client = new FindIPClient(config({ shieldAccountApiEnabled: false }), fetch);
     for (const work of [client.listShieldSites(), client.recentRiskyEvents({ site: 'shop.example' }), client.explainEvent('evt_1')]) {
       const error = await failure(work);
-      expect(error.code).toBe('endpoint_not_available');
-      expect(error.message).toContain('GET https://findip.net/api/shield/v1/sites');
+      expect(error.code).toBe('disabled');
+      expect(error.message).toContain('FINDIP_SHIELD_ACCOUNT_API');
     }
     expect(calls).toHaveLength(0);
   });
 
-  it('treats a 404 on /sites as the endpoint not being deployed', async () => {
+  it('treats a 404 on /sites as the endpoint being switched off', async () => {
     const { fetch } = mockFetch({});
     const error = await failure(new FindIPClient(config(), fetch).listShieldSites());
     expect(error.code).toBe('endpoint_not_available');
+    expect(error.message).toContain('GET https://www.findip.net/api/shield/v1/sites');
+    expect(error.message).not.toMatch(/not available yet/);
+  });
+
+  it('reports FindIP-side outages, rate limits and redirects clearly', async () => {
+    for (const code of ['key_resolver_unreachable', 'shield_api_unreachable']) {
+      const { fetch } = mockFetch({ [`GET ${API}/sites`]: { status: 502, json: { error: code } } });
+      const error = await failure(new FindIPClient(config(), fetch).listShieldSites());
+      expect(error.code).toBe('upstream_error');
+      expect(error.message).toContain(code);
+      expect(error.message).toContain('try again');
+    }
+    const limited = mockFetch({ [`GET ${API}/sites`]: { status: 429, json: { error: 'rate_limited' } } });
+    const rate = await failure(new FindIPClient(config(), limited.fetch).listShieldSites());
+    expect(rate.code).toBe('rate_limited');
+    expect(rate.message).toContain('60 requests per account per minute');
+
+    const moved = mockFetch({ [`GET ${API}/sites`]: { status: 301, text: '' } });
+    const redirect = await failure(new FindIPClient(config(), moved.fetch).listShieldSites());
+    expect(redirect.code).toBe('upstream_error');
+    expect(redirect.message).toContain('redirect');
+    expect(moved.calls).toHaveLength(1);
   });
 
   it('lists sites with a bearer API key and trims them', async () => {
@@ -168,7 +192,14 @@ describe('Shield account API (proposed)', () => {
       events_today: 120,
       risky_events_today: 7,
     });
-    expect(JSON.stringify(sites)).not.toContain('pub_abc');
+    // The endpoint returns full site objects; only the summary reaches the assistant.
+    expect(Object.keys(sites[0]!).sort()).toEqual(
+      ['domain', 'events_today', 'id', 'last_event_at', 'name', 'risky_events_today', 'status'],
+    );
+    const text = JSON.stringify(sites);
+    for (const hidden of ['pub_abc', 'fk1.k1', 'user-1', 'userId', 'identityKey', 'enforcement', 'TURNSTILE', 'turnstileSecretSet']) {
+      expect(text).not.toContain(hidden);
+    }
   });
 
   it('fetches risky events for a site named by domain, without identity', async () => {
@@ -189,6 +220,7 @@ describe('Shield account API (proposed)', () => {
       eventName: 'signup_attempt',
     });
     expect(result).toMatchObject({ range: '7d', min_risk_score: 50, returned: 1, has_more: true });
+    expect(result.site).toEqual({ id: SITE_A.id, name: 'Main shop', domain: 'shop.example' });
     const [event] = result.events as Array<Record<string, unknown>>;
     expect(event).toMatchObject({
       id: 'evt_1',
@@ -197,7 +229,6 @@ describe('Shield account API (proposed)', () => {
       network_signals: ['VPN', 'hosting provider'],
       risk_score: 82,
       recommendation: 'block',
-      identified: true,
     });
     const text = JSON.stringify(result);
     expect(text).not.toContain('person@example.com');
@@ -251,6 +282,7 @@ describe('Shield account API (proposed)', () => {
     const denied = mockFetch({ [`GET ${API}/sites`]: { status: 401, json: { error: 'invalid_api_key' } } });
     const error = await failure(new FindIPClient(config(), denied.fetch).listShieldSites());
     expect(error.code).toBe('unauthorized');
+    expect(error.message).toContain('FINDIP_API_KEY');
     expect(error.message).not.toContain(KEY);
   });
 });

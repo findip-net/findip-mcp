@@ -9,7 +9,7 @@ export function config(overrides: Partial<Config> = {}): Config {
     shieldSecretKey: SECRET,
     lookupBaseUrl: 'https://api.findip.net',
     shieldBaseUrl: 'https://shield.findip.net',
-    portalBaseUrl: 'https://findip.net',
+    portalBaseUrl: 'https://www.findip.net',
     shieldAccountApiEnabled: true,
     timeoutMs: 1000,
     ...overrides,
@@ -59,6 +59,9 @@ export const SITE_A = {
   primaryDomain: 'shop.example',
   status: 'active',
   publicSiteKey: 'pub_abc',
+  identityKey: 'fk1.k1.BASE64SPKI',
+  enforcement: { enabled: true, blockAction: 'stop', turnstileSiteKey: '0xTURNSTILE' },
+  turnstileSecretSet: true,
   lastEventAt: '2026-10-10T10:00:00.000Z',
   eventsToday: 120,
   riskyEventsToday: 7,
@@ -105,6 +108,8 @@ export const EVENT = {
   riskReasons: ['vpn_detected', 'hosting_provider'],
   browser: {},
   form: { type: 'signup' },
+  // The live endpoint strips identity, identityContext and customerContext.
+  // They stay in this fixture to prove the client would drop them as well.
   customerContext: { email_hash: 'abc' },
   identity: { email: 'person@example.com', userId: 'u_42', emailDomain: 'example.com', encrypted: true },
   enforcementAction: 'stop',
