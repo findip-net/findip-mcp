@@ -1,0 +1,34 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
+  "name": "io.github.findip-net/findip-mcp",
+  "description": "IP intelligence lookups and FindIP Shield visitor risk signals for AI assistants.",
+  "repository": {
+    "url": "https://github.com/findip-net/findip-mcp",
+    "source": "github"
+  },
+  "version": "0.1.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@findip/mcp",
+      "version": "0.1.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "FINDIP_API_KEY",
+          "description": "Your FindIP API key (free at https://www.findip.net). Used for IP lookups and your Shield sites.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "FINDIP_SHIELD_SECRET_KEY",
+          "description": "A Shield site's secret key (sec_...). Only needed for verify_session.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
