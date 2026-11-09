@@ -1,6 +1,6 @@
 {
   "name": "@findip/mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "mcpName": "io.github.findip-net/findip-mcp",
   "description": "MCP server for FindIP: IP intelligence lookups and FindIP Shield risk signals for AI assistants",
   "type": "module",
@@ -54,8 +54,8 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
-    "zod": "^3.25.76"
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.15.29",
