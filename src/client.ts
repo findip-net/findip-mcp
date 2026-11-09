@@ -33,6 +33,30 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const ACCOUNT_API_PATH = '/api/shield/v1';
 
 export const RANGES = ['24h', '7d', '14d', '30d'] as const;
+
+/** Sections of the install recipe (www.findip.net/docs/shield/agent-install.md), by its "## N." headings. */
+export const RECIPE_SECTIONS = ['all', 'keys', 'detect', 'npm', 'script_tag', 'verify', 'server_verification', 'do_not'] as const;
+export type RecipeSection = (typeof RECIPE_SECTIONS)[number];
+const RECIPE_HEADINGS: Record<Exclude<RecipeSection, 'all'>, RegExp> = {
+  keys: /^## 0\./,
+  detect: /^## 1\./,
+  npm: /^## 2A\./,
+  script_tag: /^## 2B\./,
+  verify: /^## 3\./,
+  server_verification: /^## 4\./,
+  do_not: /^## 5\./,
+};
+const RECIPE_MAX_CHARS = 40_000;
+
+/** One section of the recipe: from its heading to the next "## " heading. Null when it is not there. */
+export function recipeSection(markdown: string, section: RecipeSection): string | null {
+  if (section === 'all') return markdown;
+  const lines = markdown.split('\n');
+  const start = lines.findIndex((line) => RECIPE_HEADINGS[section].test(line));
+  if (start < 0) return null;
+  const end = lines.findIndex((line, i) => i > start && /^## /.test(line));
+  return lines.slice(start, end < 0 ? undefined : end).join('\n').trim();
+}
 export type Range = (typeof RANGES)[number];
 
 export interface RiskyEventsOptions {
@@ -274,6 +298,51 @@ export class FindIPClient {
   }
 
   // ---- Internals ----
+
+  /**
+   * Install status for a Shield site, by its PUBLIC key (pub_...): waiting, test_visit (a localhost
+   * visit before the first real one), receiving or refused, plus one sentence to act on. No API key.
+   */
+  async shieldInstallStatus(siteKey: string): Promise<unknown> {
+    const key = siteKey.trim();
+    if (key.startsWith('sec_')) {
+      throw new FindIPError('invalid_input', 'That is a secret key. Use the site\'s public key (pub_...); never share the secret key.');
+    }
+    if (!/^pub_[A-Za-z0-9_-]{4,60}$/.test(key)) {
+      throw new FindIPError('invalid_input', 'site_key must be a public Shield site key (pub_...).');
+    }
+    return this.request(
+      'Shield install status',
+      `${this.config.shieldBaseUrl}/v1/shield/install-status?site_key=${encodeURIComponent(key)}`,
+      { method: 'GET' },
+    );
+  }
+
+  /** The install recipe for coding agents, whole or one section. No API key. */
+  async shieldInstallRecipe(section: RecipeSection = 'all'): Promise<Json> {
+    const url = `${this.config.portalBaseUrl}/docs/shield/agent-install.md`;
+    let response: Response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: 'GET',
+        redirect: 'manual',
+        headers: { Accept: 'text/markdown, text/plain', 'User-Agent': `findip-mcp/${VERSION}` },
+        signal: AbortSignal.timeout(this.config.timeoutMs),
+      });
+    } catch (error) {
+      const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+      throw new FindIPError('network_error', timedOut ? 'The install recipe timed out.' : 'The install recipe could not reach FindIP.');
+    }
+    if (!response.ok) {
+      throw new FindIPError('upstream_error', `The install recipe failed with HTTP ${response.status}.`, response.status);
+    }
+    const markdown = (await response.text()).slice(0, RECIPE_MAX_CHARS);
+    const text = recipeSection(markdown, section);
+    if (text === null) {
+      throw new FindIPError('not_found', `The recipe has no "${section}" section right now. Ask for section "all".`);
+    }
+    return { source: url, section, recipe: text };
+  }
 
   private requireApiKey(): string {
     if (!this.config.apiKey) {

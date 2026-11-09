@@ -18,7 +18,7 @@ function text(result: Awaited<ReturnType<Client['callTool']>>): string {
 }
 
 describe('MCP server', () => {
-  it('registers the five read-only tools', async () => {
+  it('registers the seven read-only tools', async () => {
     const client = await connect(config(), mockFetch({}).fetch);
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([
@@ -26,6 +26,8 @@ describe('MCP server', () => {
       'list_shield_sites',
       'lookup_ip',
       'recent_risky_events',
+      'shield_install_recipe',
+      'shield_install_status',
       'verify_session',
     ]);
     for (const tool of tools) {
@@ -85,5 +87,33 @@ describe('MCP server', () => {
     const failed = await client.callTool({ name: 'lookup_ip', arguments: { ip: '1.1.1.1' } });
     expect(failed.isError).toBe(true);
     expect(text(failed)).not.toContain(KEY);
+  });
+
+  it('answers shield_install_status without an API key, and refuses a secret key', async () => {
+    const status = { state: 'test_visit', domain: 'shop.example', message: 'A test visit from localhost arrived.' };
+    const { fetch, calls } = mockFetch({ 'GET https://shield.findip.net/v1/shield/install-status': { json: status } });
+    const client = await connect(config({ apiKey: '', shieldSecretKey: '' }), fetch);
+    const ok = await client.callTool({ name: 'shield_install_status', arguments: { site_key: 'pub_0123456789abcdef' } });
+    expect(ok.isError).toBeFalsy();
+    expect(JSON.parse(text(ok))).toEqual(status);
+    expect(calls[0]!.url).toBe('https://shield.findip.net/v1/shield/install-status?site_key=pub_0123456789abcdef');
+    expect(calls[0]!.headers.Authorization).toBeUndefined();
+
+    const bad = await client.callTool({ name: 'shield_install_status', arguments: { site_key: 'sec_0123456789abcdef' } });
+    expect(bad.isError).toBe(true);
+    expect(text(bad)).toContain('public key');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('answers shield_install_recipe whole or by section', async () => {
+    const md = '# Recipe\n\nIntro.\n\n## 0. What you need\n\nKey.\n\n## 3. Verify the install\n\nCall install-status.\n\n## 4. Optional\n\nServer.\n';
+    const { fetch } = mockFetch({ 'GET https://www.findip.net/docs/shield/agent-install.md': { text: md } });
+    const client = await connect(config({ apiKey: '' }), fetch);
+    const all = JSON.parse(text(await client.callTool({ name: 'shield_install_recipe', arguments: {} })));
+    expect(all.recipe).toBe(md);
+    const verify = JSON.parse(text(await client.callTool({ name: 'shield_install_recipe', arguments: { section: 'verify' } })));
+    expect(verify.recipe).toBe('## 3. Verify the install\n\nCall install-status.');
+    const missing = await client.callTool({ name: 'shield_install_recipe', arguments: { section: 'npm' } });
+    expect(missing.isError).toBe(true);
   });
 });
