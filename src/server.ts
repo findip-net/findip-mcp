@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { FindIPClient, FindIPError, RANGES, type FetchLike } from './client.js';
+import { FindIPClient, FindIPError, RANGES, RECIPE_SECTIONS, type FetchLike } from './client.js';
 import { VERSION, loadConfig, type Config } from './config.js';
 
 export { FindIPClient, FindIPError, loadConfig };
@@ -107,6 +107,39 @@ export function createServer(config: Config = loadConfig(), fetchImpl?: FetchLik
       annotations: READ_ONLY,
     },
     ({ event_id, site }) => run(() => client.explainEvent(event_id, site || undefined)),
+  );
+
+  server.registerTool(
+    'shield_install_recipe',
+    {
+      title: 'Shield install recipe',
+      description:
+        'The step-by-step recipe for adding FindIP Shield to a website project: which key to use, how to detect the framework, ' +
+        'the npm and script-tag routes, how to verify, optional server verification, and what not to do. ' +
+        'Follow it when asked to install Shield. Pass a section to get only that part. Needs no API key.',
+      inputSchema: {
+        section: z.enum(RECIPE_SECTIONS).optional().describe('Part of the recipe: keys, detect, npm, script_tag, verify, server_verification, do_not. Default all'),
+      },
+      annotations: READ_ONLY,
+    },
+    ({ section }) => run(() => client.shieldInstallRecipe(section ?? 'all')),
+  );
+
+  server.registerTool(
+    'shield_install_status',
+    {
+      title: 'Shield install status',
+      description:
+        'Checks whether a Shield install works, by the site\'s public key (pub_...): "waiting" (nothing yet), ' +
+        '"test_visit" (a visit from localhost arrived before the first real one, so the SDK sends; it is not stored), ' +
+        '"receiving" (real visits arrive) or "refused" (with the reason), plus one sentence to act on or pass to the site owner. ' +
+        'Call it after loading a page with the SDK on it. Needs no API key; never pass the secret key.',
+      inputSchema: {
+        site_key: z.string().min(5).max(64).describe('The site\'s public key, pub_...'),
+      },
+      annotations: READ_ONLY,
+    },
+    ({ site_key }) => run(() => client.shieldInstallStatus(site_key)),
   );
 
   return server;

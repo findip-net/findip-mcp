@@ -13,8 +13,10 @@ Ask your assistant about an IP address or a risky session, and get the answer fr
 | `list_shield_sites` | Your Shield sites with today's event and risky-event counts | API key |
 | `recent_risky_events` | Recent high-risk events on a site, for example "what risky traffic hit my signup form this week" | API key |
 | `explain_event` | One event in plain language: where it came from, which signals fired, what was recommended | API key |
+| `shield_install_recipe` | The recipe for adding Shield to a project: keys, framework detection, npm or script tag, how to verify | None |
+| `shield_install_status` | Whether an install works, by the site's public key: waiting, test visit from localhost, receiving, or refused and why | None |
 
-All five tools are read-only. [docs/BACKEND.md](docs/BACKEND.md) lists the FindIP endpoint behind each one.
+All seven tools are read-only. [docs/BACKEND.md](docs/BACKEND.md) lists the FindIP endpoint behind each one.
 
 ## Setup
 

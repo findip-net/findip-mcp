@@ -1,6 +1,6 @@
 {
   "name": "@findip/mcp",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "mcpName": "io.github.findip-net/findip-mcp",
   "description": "MCP server for FindIP: IP intelligence lookups and FindIP Shield risk signals for AI assistants",
   "type": "module",

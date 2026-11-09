@@ -9,6 +9,8 @@ Every tool is a read. This page lists what each one calls.
 | `list_shield_sites` | `GET https://www.findip.net/api/shield/v1/sites` | FindIP API key, `Authorization: Bearer <key>` |
 | `recent_risky_events` | `GET https://www.findip.net/api/shield/v1/sites/{siteId}/events` | same |
 | `explain_event` | `GET https://www.findip.net/api/shield/v1/sites/{siteId}/events/{eventId}` | same |
+| `shield_install_recipe` | `GET https://www.findip.net/docs/shield/agent-install.md` | None (public page) |
+| `shield_install_status` | `GET https://shield.findip.net/v1/shield/install-status?site_key=pub_...` | None (the public site key is already in the site's page) |
 
 ## Shield account API
 
